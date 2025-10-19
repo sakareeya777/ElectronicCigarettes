@@ -1,0 +1,12 @@
+node_modules/
+web-build/
+.expo/
+.env
+.idea/
+.vscode/
+.DS_Store
+coverage/
+npm-debug.log
+yarn-error.log
+recovered-src/
+dist/
