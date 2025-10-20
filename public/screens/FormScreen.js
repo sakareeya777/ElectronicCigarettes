@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, TextInput, TouchableOpacity, Image } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
-import { MaterialIcons } from '@expo/vector-icons';
+import { MdReport, MdAddAPhoto } from 'react-icons/md';
 
 export default function FormScreen() {
   const [location, setLocation] = useState('');
@@ -30,7 +30,7 @@ export default function FormScreen() {
   return (
     <View style={styles.container}>
       <Text style={styles.header}>
-        <MaterialIcons name="report" size={28} color="#229954" /> รายงานแหล่งจำหน่าย/แหล่งมั่วสุม
+        <MdReport size={28} color="#229954" /> รายงานแหล่งจำหน่าย/แหล่งมั่วสุม
       </Text>
       <View style={styles.formBox}>
         <Text style={styles.label}>สถานที่</Text>
@@ -48,7 +48,7 @@ export default function FormScreen() {
           onChangeText={setType}
         />
         <TouchableOpacity style={styles.imageButton} onPress={pickImage}>
-          <MaterialIcons name="add-a-photo" size={24} color="#fff" />
+          <MdAddAPhoto size={24} color="#fff" />
           <Text style={styles.imageButtonText}>แนบภาพ</Text>
         </TouchableOpacity>
         {image && (

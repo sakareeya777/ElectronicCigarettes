@@ -1,7 +1,7 @@
 import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createStackNavigator } from '@react-navigation/stack';
-import Ionicons from 'react-native-vector-icons/Ionicons';
+import { IoHomeOutline, IoDocumentOutline, IoCameraOutline, IoPersonOutline } from 'react-icons/io5';
 import HomeScreen from './screens/HomeScreen';
 import FormScreen from './screens/FormScreen';
 import CameraScreen from './screens/CameraScreen';
@@ -17,12 +17,11 @@ function MainTabs() {
     <Tab.Navigator
       screenOptions={({ route }) => ({
         tabBarIcon: ({ color, size }) => {
-          let iconName;
-          if (route.name === 'Home') iconName = 'home-outline';
-          else if (route.name === 'Form') iconName = 'document-outline';
-          else if (route.name === 'Camera') iconName = 'camera-outline';
-          else if (route.name === 'Profile') iconName = 'person-outline';
-          return <Ionicons name={iconName} size={size} color={color} />;
+          if (route.name === 'Home') return <IoHomeOutline size={size} color={color} />;
+          if (route.name === 'Form') return <IoDocumentOutline size={size} color={color} />;
+          if (route.name === 'Camera') return <IoCameraOutline size={size} color={color} />;
+          if (route.name === 'Profile') return <IoPersonOutline size={size} color={color} />;
+          return null;
         },
         tabBarActiveTintColor: '#ff6600',
         tabBarInactiveTintColor: 'gray',

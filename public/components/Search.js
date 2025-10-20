@@ -1,36 +1,33 @@
 import { useState } from 'react';
-import { SearchBar } from 'react-native-elements';
+import TextField from '@mui/material/TextField';
+import InputAdornment from '@mui/material/InputAdornment';
+import { IoSearch } from 'react-icons/io5';
 
 export default function Search() {
   const [search, setSearch] = useState('');
 
   return (
-    <SearchBar
+    <TextField
       placeholder="Search Here"
-      onChangeText={setSearch}
       value={search}
-      platform="default"
-      round
-      lightTheme
-      containerStyle={{
+      onChange={e => setSearch(e.target.value)}
+      variant="outlined"
+      fullWidth
+      sx={{
         backgroundColor: 'transparent',
-        borderTopWidth: 0,
-        borderBottomWidth: 0,
-        marginBottom: 32,
-        padding: 0, 
+        marginBottom: 4,
+        '& .MuiOutlinedInput-root': {
+          borderRadius: 25,
+          minHeight: 40,
+          fontSize: 16,
+        },
       }}
-      inputContainerStyle={{
-        backgroundColor: '#fff',
-        borderWidth: 1,
-        borderColor: '#000',
-        borderRadius: 25,
-        minHeight: 40, 
-        paddingVertical: 0,
-      }}
-      inputStyle={{
-        fontSize: 16, 
-        padding: 0,
-        paddingVertical: 0,
+      InputProps={{
+        startAdornment: (
+          <InputAdornment position="start">
+            <IoSearch />
+          </InputAdornment>
+        ),
       }}
     />
   );

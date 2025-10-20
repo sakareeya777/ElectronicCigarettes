@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { TouchableOpacity, Modal, View, Text, StyleSheet } from 'react-native';
-import Icon from 'react-native-vector-icons/MaterialIcons';
+import { IoMenu } from 'react-icons/io5';
 import { useNavigation, useRoute } from '@react-navigation/native'; 
 
 
@@ -15,7 +15,7 @@ export default function HamburgerMenu() {
   return (
     <>
       <TouchableOpacity onPress={() => setVisible(true)}>
-        <Icon name="menu" size={32} color="#bbb" />
+        <IoMenu size={32} color="#bbb" />
       </TouchableOpacity>
       <Modal
         visible={visible}
