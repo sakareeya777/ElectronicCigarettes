@@ -1,64 +1,87 @@
 import React, { useState } from "react";
-import { View, Text, TextInput, TouchableOpacity, Image, StyleSheet, Alert } from "react-native";
+import { View, Text, TextInput, TouchableOpacity, Image, StyleSheet } from "react-native";
 import axios from "axios";
+import { useUserAuth } from "../context/UserAuthContext";
 const sabanoorImg = require('../assets/sabanoor.jpg');
-//import googleImg from '../assets/google.png';
-//import facebookImg from '../assets/facebook.png';
-//import appleImg from '../assets/apple.png';
 
 export default function LoginScreen({ navigation }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [message, setMessage] = useState("");
+  const [messageType, setMessageType] = useState(""); // 'error' or 'success'
+  const { login } = useUserAuth() || {};
 
-  const handleLogin = async () => {
+
+  function validateEmail(email) {
+    return /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email);
+  }
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setMessage("");
+    setMessageType("");
+    const normalizedEmail = (email || '').trim().toLowerCase();
+    if (!normalizedEmail || !password) {
+      setMessage("กรุณากรอกอีเมลและรหัสผ่าน");
+      setMessageType("error");
+      return;
+    }
+    if (!validateEmail(normalizedEmail)) {
+      setMessage("รูปแบบอีเมลไม่ถูกต้อง");
+      setMessageType("error");
+      return;
+    }
+    if (password.length < 6) {
+      setMessage("รหัสผ่านต้องมีอย่างน้อย 6 ตัวอักษร");
+      setMessageType("error");
+      return;
+    }
     try {
-      const res = await axios.post("http://10.204.233.188:5000/api/auth/login", {
-        email,
-        password,
-      });
-      Alert.alert("Login Success", `Welcome ${res.data.name}`);
-      navigation.navigate("MainTabs", {
-        screen: "Profile",
-        params: {
-          _id: res.data._id,
-          name: res.data.name,
-          email: res.data.email,
-          token: res.data.token,
-        },
-      });
+      await login(normalizedEmail, password);
+      setMessage("เข้าสู่ระบบสำเร็จ!");
+      setMessageType("success");
+      setTimeout(() => {
+        navigation.navigate("MainTabs");
+      }, 1200);
     } catch (err) {
-      Alert.alert("Error", err.response?.data?.msg || "Login failed");
+      let msg = "เกิดข้อผิดพลาด กรุณาตรวจสอบข้อมูลอีกครั้ง";
+      if (err?.code === "auth/user-not-found") msg = "ไม่พบผู้ใช้งานนี้";
+      else if (err?.code === "auth/wrong-password") msg = "รหัสผ่านไม่ถูกต้อง";
+      else if (err?.code === "auth/invalid-email") msg = "อีเมลไม่ถูกต้อง";
+      setMessage(msg);
+      setMessageType("error");
     }
   };
 
   return (
     <View style={styles.container}>
       <Image source={sabanoorImg} style={styles.logo} />
-      <Text style={styles.title}>Nice to see you!</Text>
       <TextInput
-        placeholder="Email"
+        placeholder="E-mail"
         value={email}
-        onChangeText={setEmail}
+        onChange={(e) => setEmail(e.target.value)}
         style={styles.input}
         placeholderTextColor="#fff"
+        autoCapitalize="none"
+        keyboardType="email-address"
       />
       <TextInput
-        placeholder="Enter Password"
+        placeholder="Password"
         value={password}
-        onChangeText={setPassword}
+        onChange={(e) => setPassword(e.target.value)}
         secureTextEntry
         style={styles.input}
         placeholderTextColor="#fff"
+        autoCapitalize="none"
       />
-      <TouchableOpacity style={styles.button} onPress={handleLogin}>
-        <Text style={styles.buttonText}>Login</Text>
+      <TouchableOpacity style={styles.button} onPress={handleSubmit}>
+        <Text style={styles.buttonText}>Sign In</Text>
       </TouchableOpacity>
-      <Text style={styles.bottomText}>
-        Don't have an account yet?{" "}
-        <Text style={styles.registerLink} onPress={() => navigation.navigate("Register")}>
-          Register Now!
-        </Text>
-      </Text>
+      {message && (
+        <View style={[styles.msgBox, messageType === 'error' ? styles.msgError : styles.msgSuccess]}>
+          <Text style={{ color: '#fff', textAlign: 'center' }}>{message}</Text>
+        </View>
+      )}
     </View>
   );
 }
@@ -111,21 +134,38 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "center",
     marginTop: 10,
-    marginBottom: 10,
   },
   socialIcon: {
     width: 32,
     height: 32,
     marginHorizontal: 8,
   },
-  bottomText: {
-    marginTop: 10,
-    color: "#58595B", // เทา สสส
-    fontSize: 14,
+  msgBox: {
+    marginTop: 12,
+    padding: 10,
+    borderRadius: 8,
+    minWidth: 200,
+    alignSelf: 'center',
+    opacity: 0.95,
   },
-  registerLink: {
-    color: "#F58220", // ส้ม สสส
-    fontWeight: "bold",
-    textDecorationLine: "underline",
+  msgError: {
+    backgroundColor: '#e74c3c',
   },
+  msgSuccess: {
+    backgroundColor: '#2ecc71',
+  },
+  msgBox: {
+    marginTop: 12,
+    padding: 10,
+    borderRadius: 8,
+    minWidth: 200,
+    alignSelf: 'center',
+    opacity: 0.95,
+  },
+  msgError: {
+    backgroundColor: '#e74c3c',
+  },
+  msgSuccess: {
+    backgroundColor: '#2ecc71',
+  }
 });

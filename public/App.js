@@ -8,6 +8,8 @@ import CameraScreen from './screens/CameraScreen';
 import ProfileScreen from './screens/ProfileScreen';
 import Login from './login/Login';
 import Register from './register/Register';
+import UserAuthContextProvider from './context/UserAuthContext';
+
 
 const Tab = createBottomTabNavigator();
 const Stack = createStackNavigator();
@@ -38,12 +40,14 @@ function MainTabs() {
 
 export default function App() {
   return (
-    <NavigationContainer>
-      <Stack.Navigator screenOptions={{ headerShown: false }}>
-        <Stack.Screen name="MainTabs" component={MainTabs} />
-        <Stack.Screen name="Login" component={Login} />
-        <Stack.Screen name="Register" component={Register} />
-      </Stack.Navigator>
-    </NavigationContainer>
+    <UserAuthContextProvider>
+      <NavigationContainer>
+        <Stack.Navigator screenOptions={{ headerShown: false }}>
+          <Stack.Screen name="MainTabs" component={MainTabs} />
+          <Stack.Screen name="Login" component={Login} />
+          <Stack.Screen name="Register" component={Register} />
+        </Stack.Navigator>
+      </NavigationContainer>
+    </UserAuthContextProvider>
   );
 }

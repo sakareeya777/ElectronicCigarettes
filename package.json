@@ -26,6 +26,7 @@
     "expo-camera": "^17.0.8",
     "expo-file-system": "^19.0.17",
     "expo-image-picker": "~17.0.8",
+    "firebase": "^9.23.0",
     "react": "19.1.1",
     "react-dom": "19.1.1",
     "react-icons": "^4.11.0",

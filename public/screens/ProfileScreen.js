@@ -1,71 +1,83 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Image, Switch } from 'react-native';
 import { CommonActions } from '@react-navigation/native';
+import { useUserAuth } from '../context/UserAuthContext';
 
 export default function ProfileScreen({ route, navigation }) {
+  const { user, logout } = useUserAuth() || {};
   const params = route?.params || {};
+
+  const handleLogout = async () => {
+    try {
+      await logout();
+    } catch (e) {
+      console.error('Logout error', e);
+    }
+    navigation.dispatch(
+      CommonActions.reset({
+        index: 0,
+        routes: [{ name: 'Login' }],
+      })
+    );
+  }
+
   return (
     <View style={styles.container}>
       <Text style={styles.header}>ข้อมูลส่วนตัว</Text>
-      <View style={styles.profilePicContainer}>
-        
-      </View>
-      <View style={styles.pointContainer}>
-        <Text style={styles.pointText}>Point +999</Text>
-        <Text style={styles.addText}>เพิ่มแต้ม</Text>
-      </View>
-      <TouchableOpacity
-        style={styles.couponButton}
-        onPress={() => {
-          navigation.navigate('CouponExchange', { point: 999 });
-        }}
-      >
-        <Text style={styles.couponText}>แลกคูปอง</Text>
-      </TouchableOpacity>
-      <View style={styles.infoBox}>
-        <View style={styles.inputBox}>
-          <Text style={styles.label}>ชื่อผู้ใช้</Text>
-          <Text style={styles.inputText}>{params.name}</Text>
+
+      {!user ? (
+        <View style={{ alignItems: 'center', marginTop: 40, width: '100%' }}>
+          <Text style={{ marginBottom: 24 }}>คุณยังไม่ได้เข้าสู่ระบบ</Text>
+          <TouchableOpacity
+            style={[styles.couponButton, { width: '80%', marginBottom: 12 }]}
+            onPress={() => navigation.navigate('Login')}
+          >
+            <Text style={styles.couponText}>เข้าสู่ระบบ</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.couponButton, { backgroundColor: '#F58220', width: '80%' }]}
+            onPress={() => navigation.navigate('Register')}
+          >
+            <Text style={styles.couponText}>สมัครสมาชิก</Text>
+          </TouchableOpacity>
         </View>
-        <View style={styles.inputBox}>
-          <Text style={styles.label}>User ID</Text>
-          <Text style={styles.inputText}>{params._id ? params._id : "ไม่พบไอดี"}</Text>
-        </View>
-      </View>
-      <View style={styles.socialBox}>
-        <Text style={styles.socialLabel}>บัญชีที่เข้าสู่ระบบ</Text>
-        <View style={styles.socialRow}>
-          
-          <Text style={styles.socialText}>GOOGLE</Text>
-          <Text style={styles.socialEmail}>{params.email}</Text>
-        </View>
-      </View>
-      <View style={styles.socialBox}>
-        <Text style={styles.socialLabel}>เข้าสู่ระบบด้วยบัญชีอื่น</Text>
-        <View style={styles.socialRow}>
-          
-          <Text style={styles.socialText}>FACEBOOK</Text>
-          <Switch value={false} />
-        </View>
-        <View style={styles.socialRow}>
-          
-          <Text style={styles.socialText}>APPLE ID</Text>
-          <Switch value={false} />
-        </View>
-      </View>
-      <TouchableOpacity
-        style={styles.logoutButton}
-        onPress={() => {
-          navigation.dispatch(
-            CommonActions.reset({
-              index: 0,
-              routes: [{ name: 'Home' }],
-            })
-          );
-        }}
-      >
-        <Text style={styles.logoutText}>ออกจากระบบ</Text>
-      </TouchableOpacity>
+      ) : (
+        <>
+          <View style={styles.profilePicContainer} />
+          <View style={styles.pointContainer}>
+            <Text style={styles.pointText}>Point +999</Text>
+            <Text style={styles.addText}>เพิ่มแต้ม</Text>
+          </View>
+          <TouchableOpacity
+            style={styles.couponButton}
+            onPress={() => {
+              navigation.navigate('CouponExchange', { point: 999 });
+            }}
+          >
+            <Text style={styles.couponText}>แลกคูปอง</Text>
+          </TouchableOpacity>
+          <View style={styles.infoBox}>
+            <View style={styles.inputBox}>
+              <Text style={styles.label}>ชื่อผู้ใช้</Text>
+              <Text style={styles.inputText}>{user.displayName || 'ไม่ระบุ'}</Text>
+            </View>
+            <View style={styles.inputBox}>
+              <Text style={styles.label}>User ID</Text>
+              <Text style={styles.inputText}>{user.uid || params._id || 'ไม่พบไอดี'}</Text>
+            </View>
+          </View>
+          <View style={styles.socialBox}>
+            <Text style={styles.socialLabel}>บัญชีที่เข้าสู่ระบบ</Text>
+            <View style={styles.socialRow}>
+              <Text style={styles.socialText}>EMAIL</Text>
+              <Text style={styles.socialEmail}>{user.email || params.email}</Text>
+            </View>
+          </View>
+          <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
+            <Text style={styles.logoutText}>ออกจากระบบ</Text>
+          </TouchableOpacity>
+        </>
+      )}
     </View>
   );
 }

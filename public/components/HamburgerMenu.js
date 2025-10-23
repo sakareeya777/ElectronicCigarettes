@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { TouchableOpacity, Modal, View, Text, StyleSheet } from 'react-native';
 import { IoMenu } from 'react-icons/io5';
-import { useNavigation, useRoute } from '@react-navigation/native'; 
+import { useNavigation, useRoute } from '@react-navigation/native';
+import { useUserAuth } from '../context/UserAuthContext'; 
 
 
 export default function HamburgerMenu() {
@@ -9,8 +10,10 @@ export default function HamburgerMenu() {
   const navigation = useNavigation();
   const route = useRoute();
   const params = route?.params;
+  const {logout, user} = useUserAuth();
 
-  const notLoggedIn = !params || !params.name || !params.email;
+  // Use user from context to determine login state
+  const loggedIn = !!user;
 
   return (
     <>
@@ -25,7 +28,18 @@ export default function HamburgerMenu() {
       >
         <View style={styles.overlay}>
           <View style={styles.menu}>
-            {notLoggedIn && (
+            {loggedIn ? (
+              <Text
+                style={styles.menuItem}
+                onPress={async () => {
+                  setVisible(false);
+                  await logout();
+                  navigation.navigate('Login');
+                }}
+              >
+                Logout
+              </Text>
+            ) : (
               <>
                 <Text
                   style={styles.menuItem}
