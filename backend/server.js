@@ -298,6 +298,27 @@ app.get('/news/thaihealth', async (req, res) => {
   }
 });
 
+
+// Serve frontend static files if a build folder exists at repository root.
+// Check common build dirs like `web-build` or `dist` so the same Render service
+// can host both the API and the built web app regardless of your build output.
+const FRONTEND_CANDIDATES = [path.join(__dirname, '..', 'web-build'), path.join(__dirname, '..', 'dist')];
+let FRONTEND_DIR = null;
+for (const p of FRONTEND_CANDIDATES) {
+  if (fs.existsSync(p)) { FRONTEND_DIR = p; break; }
+}
+if (FRONTEND_DIR) {
+  console.log('Serving frontend from', FRONTEND_DIR);
+  app.use(express.static(FRONTEND_DIR));
+  // Serve index.html for SPA routes
+  app.get('/', (req, res) => res.sendFile(path.join(FRONTEND_DIR, 'index.html')));
+  app.get('*', (req, res, next) => {
+    // allow API routes to pass through
+    if (req.path.startsWith('/news') || req.path.startsWith('/thumb')) return next();
+    res.sendFile(path.join(FRONTEND_DIR, 'index.html'));
+  });
+}
+
 app.listen(PORT, () => console.log(`ThaiHealth news proxy listening on http://localhost:${PORT}/news/thaihealth`));
 
 // Simple thumbnail proxy to avoid CORS / remote blocking and ensure images are accessible to the app
