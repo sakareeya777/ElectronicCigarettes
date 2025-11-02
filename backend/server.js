@@ -17,7 +17,43 @@ const parser = new Parser();
 const PORT = process.env.PORT || 3001;
 
 app.use(cors());
+ 
+// If a frontend production build exists next to the backend, try common build dirs
+// (e.g. `web-build`, `dist`, or `public`). Serve the first one found so Render can
+// host both API and SPA from a single service.
+// prefer `dist` (actual expo export) when present, then `web-build`, then `public`
+const POSSIBLE_STATIC_DIRS = [
+  path.join(__dirname, '..', 'dist'),
+  path.join(__dirname, '..', 'web-build'),
+  path.join(__dirname, '..', 'public'),
+];
+let servedStaticFrom = null;
+for (const d of POSSIBLE_STATIC_DIRS) {
+  try {
+    if (fs.existsSync(d)) {
+      servedStaticFrom = d;
+      break;
+    }
+  } catch (e) {
+    // ignore
+  }
+}
 
+if (servedStaticFrom) {
+  console.log('Serving static frontend from', servedStaticFrom);
+  app.use(express.static(servedStaticFrom));
+  // SPA fallback: return index.html for unknown GET routes to support client routing.
+  // Important: skip API routes so endpoints like /news/thaihealth and /thumb still work.
+  app.get('*', (req, res, next) => {
+    const apiPrefixes = ['/news', '/thumb', '/api'];
+    for (const p of apiPrefixes) {
+      if (req.path.startsWith(p)) return next();
+    }
+    const index = path.join(servedStaticFrom, 'index.html');
+    if (fs.existsSync(index)) return res.sendFile(index);
+    return next();
+  });
+}
 const THAIHEALTH_RSS = 'https://www.thaihealth.or.th/category/%E0%B8%82%E0%B9%88%E0%B8%B2%E0%B8%A7%E0%B8%AA%E0%B8%A3%E0%B9%89%E0%B8%B2%E0%B8%87%E0%B8%AA%E0%B8%B8%E0%B8%82/%E0%B8%82%E0%B9%88%E0%B8%B2%E0%B8%A7%E0%B8%AA%E0%B8%B8%E0%B8%82%E0%B8%A0%E0%B8%B2%E0%B8%9E/feed/';
 
 // keywords to filter articles about e-cigarettes / บุหรี่ไฟฟ้า
@@ -298,26 +334,6 @@ app.get('/news/thaihealth', async (req, res) => {
   }
 });
 
-
-// Serve frontend static files if a build folder exists at repository root.
-// Check common build dirs like `web-build` or `dist` so the same Render service
-// can host both the API and the built web app regardless of your build output.
-const FRONTEND_CANDIDATES = [path.join(__dirname, '..', 'web-build'), path.join(__dirname, '..', 'dist')];
-let FRONTEND_DIR = null;
-for (const p of FRONTEND_CANDIDATES) {
-  if (fs.existsSync(p)) { FRONTEND_DIR = p; break; }
-}
-if (FRONTEND_DIR) {
-  console.log('Serving frontend from', FRONTEND_DIR);
-  app.use(express.static(FRONTEND_DIR));
-  // Serve index.html for SPA routes
-  app.get('/', (req, res) => res.sendFile(path.join(FRONTEND_DIR, 'index.html')));
-  app.get('*', (req, res, next) => {
-    // allow API routes to pass through
-    if (req.path.startsWith('/news') || req.path.startsWith('/thumb')) return next();
-    res.sendFile(path.join(FRONTEND_DIR, 'index.html'));
-  });
-}
 
 app.listen(PORT, () => console.log(`ThaiHealth news proxy listening on http://localhost:${PORT}/news/thaihealth`));
 
