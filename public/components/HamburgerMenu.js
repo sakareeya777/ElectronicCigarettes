@@ -28,39 +28,28 @@ export default function HamburgerMenu() {
       >
         <View style={styles.overlay}>
           <View style={styles.menu}>
+            <Text
+              style={styles.menuItem}
+              onPress={() => {
+                setVisible(false);
+                navigation.navigate('Profile');
+              }}
+            >
+              Profile
+            </Text>
             {loggedIn ? (
               <Text
                 style={styles.menuItem}
                 onPress={async () => {
                   setVisible(false);
                   await logout();
+                  // after logout, navigate to Login or Home as desired
                   navigation.navigate('Login');
                 }}
               >
                 Logout
               </Text>
-            ) : (
-              <>
-                <Text
-                  style={styles.menuItem}
-                  onPress={() => {
-                    setVisible(false);
-                    navigation.navigate('Login'); 
-                  }}
-                >
-                  Login
-                </Text>
-                <Text
-                  style={styles.menuItem}
-                  onPress={() => {
-                    setVisible(false);
-                    navigation.navigate('Register'); 
-                  }}
-                >
-                  Register
-                </Text>
-              </>
-            )}
+            ) : null}
             <Text style={styles.menuItem} onPress={() => setVisible(false)}>
               Close
             </Text>
