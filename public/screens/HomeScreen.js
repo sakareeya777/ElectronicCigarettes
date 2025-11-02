@@ -107,7 +107,7 @@ export default function HomeScreen() {
   const [error, setError] = useState(null);
   const [noRelated, setNoRelated] = useState(false);
 
-  const NEWS_ENDPOINT = process.env.NEWS_ENDPOINT || 'http://localhost:3001/news/thaihealth';
+  const NEWS_ENDPOINT = process.env.NEWS_ENDPOINT || 'https://electroniccigarettes.onrender.com/';
 
   useEffect(() => {
     let mounted = true;
