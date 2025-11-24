@@ -7,9 +7,10 @@
     "postinstall": "node scripts/copy-dist.js"
   },
   "dependencies": {
+    "cors": "^2.8.5",
     "express": "^4.18.2",
+    "firebase-admin": "^13.5.0",
     "node-fetch": "^2.6.7",
-    "rss-parser": "^3.12.0",
-    "cors": "^2.8.5"
+    "rss-parser": "^3.12.0"
   }
 }

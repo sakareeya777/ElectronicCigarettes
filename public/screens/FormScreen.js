@@ -19,6 +19,46 @@ export default function FormScreen() {
   const [submissionMode, setSubmissionMode] = useState('anonymous'); // 'anonymous' | 'identified'
   const [reporterName, setReporterName] = useState('');
   const [reporterContact, setReporterContact] = useState(''); // phone or email if identified
+  const [submitting, setSubmitting] = useState(false);
+
+  const NEWS_ENDPOINT = process.env.NEWS_ENDPOINT || 'https://electroniccigarettes.onrender.com/news/thaihealth';
+
+  const getBackendOrigin = () => {
+    // If running in the browser on localhost, prefer the local backend (development convenience).
+    try {
+      if (typeof window !== 'undefined' && window.location) {
+        const hostname = window.location.hostname;
+        if (hostname === 'localhost' || hostname === '127.0.0.1') {
+          return 'http://localhost:3001';
+        }
+      }
+    } catch (e) {
+      // ignore
+    }
+
+    // prefer explicit NEWS_ENDPOINT if it's a full URL
+    try {
+      const u = new URL(NEWS_ENDPOINT);
+      return u.origin;
+    } catch (e) {
+      // Not an absolute URL
+      if (typeof window !== 'undefined' && window.location) {
+        // if NEWS_ENDPOINT is a path like '/news/thaihealth', use same origin
+        if (NEWS_ENDPOINT && NEWS_ENDPOINT.startsWith('/')) {
+          return window.location.origin;
+        }
+      }
+      // Last resort: strip '/news...' from configured endpoint or use production origin
+      try {
+        const maybe = NEWS_ENDPOINT.replace(/\/news.*$/,'');
+        if (maybe) return maybe;
+      } catch (e2) {
+        // ignore
+      }
+      return 'https://electroniccigarettes.onrender.com';
+    }
+  };
+  const BACKEND_ORIGIN = getBackendOrigin();
 
   const TYPE_OPTIONS = [
     'ขาย',
@@ -88,15 +128,40 @@ export default function FormScreen() {
       location,
       coords,
       description,
+      // Note: media upload not implemented on web yet. We send mediaUri as hint only.
       media: mediaUri ? { uri: mediaUri, mediaType } : null,
       anonymous: submissionMode === 'anonymous',
       reporter: submissionMode === 'identified' ? { name: reporterName || null, contact: reporterContact } : null,
     };
-    // TODO: ส่ง payload ไปยัง backend (เช่น fetch / API call)
-    console.log('ส่งรายงาน payload:', payload);
-    alert('ส่งรายงานเรียบร้อย!');
+    // Send payload to backend POST /reports
+    const submit = async () => {
+      try {
+        setSubmitting(true);
+        const url = `${BACKEND_ORIGIN}/reports`;
+        console.log('Submitting report to', url, 'payload=', payload);
+        const res = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+        if (!res.ok) {
+          const text = await res.text();
+          throw new Error(`Server error: ${res.status} ${text} (POST ${url})`);
+        }
+        const data = await res.json();
+        console.log('Server response:', data);
+        alert('ส่งรายงานเรียบร้อย! ขอบคุณสำหรับข้อมูล');
+      } catch (e) {
+        console.error('Submit failed', e);
+        alert('ส่งรายงานไม่สำเร็จ: ' + (e.message || e));
+      } finally {
+        setSubmitting(false);
+      }
+    };
+    submit();
 
     // รีเซ็ตฟอร์ม
+    // reset non-blocking (we keep after attempt)
     setLocation('');
     setType('');
     setImage(null);

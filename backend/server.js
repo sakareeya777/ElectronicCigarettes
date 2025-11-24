@@ -7,6 +7,23 @@ const fs = require('fs');
 const fsp = require('fs').promises;
 const path = require('path');
 const crypto = require('crypto');
+const admin = require('firebase-admin');
+
+// Try to initialize firebase-admin from a service account JSON placed at backend/serviceAccountKey.json
+let adminInitialized = false;
+try {
+  const saPath = path.join(__dirname, 'serviceAccountKey.json');
+  if (fs.existsSync(saPath)) {
+    const serviceAccount = require(saPath);
+    admin.initializeApp({ credential: admin.credential.cert(serviceAccount) });
+    adminInitialized = true;
+    console.log('firebase-admin initialized from', saPath);
+  } else {
+    console.log('No serviceAccountKey.json found at backend/serviceAccountKey.json — firebase-admin not initialized');
+  }
+} catch (e) {
+  console.warn('Failed to initialize firebase-admin:', e && e.message);
+}
 
 const CACHE_DIR = path.join(__dirname, 'cache');
 // ensure cache dir exists
@@ -17,6 +34,8 @@ const parser = new Parser();
 const PORT = process.env.PORT || 3001;
 
 app.use(cors());
+// parse JSON bodies (for form submissions)
+app.use(express.json({ limit: '8mb' }));
  
 // If a frontend production build exists next to the backend, try common build dirs
 // (e.g. `web-build`, `dist`, or `public`). Serve the first one found so Render can
@@ -54,6 +73,42 @@ if (servedStaticFrom) {
     return next();
   });
 }
+
+// Admin-backed endpoint to fetch reports from Firestore (optional)
+app.get('/reports', async (req, res) => {
+  if (!adminInitialized) return res.status(500).json({ error: 'admin_not_initialized', message: 'Place backend/serviceAccountKey.json to enable this endpoint' });
+  try {
+    const db = admin.firestore();
+    const snap = await db.collection('report').orderBy('created_at', 'desc').limit(50).get();
+    const items = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    res.json({ items });
+  } catch (e) {
+    console.error('Failed to fetch reports:', e && e.message);
+    res.status(500).json({ error: 'fetch_failed' });
+  }
+});
+
+// Accept report submissions from the frontend
+app.post('/reports', async (req, res) => {
+  const payload = req.body || {};
+  // basic validation
+  if (!payload.type || !payload.date || !payload.time || !payload.description) {
+    return res.status(400).json({ error: 'missing_fields', message: 'type, date, time, description are required' });
+  }
+  if (!adminInitialized) {
+    // If admin not initialized, return 503 so frontend can surface error
+    return res.status(503).json({ error: 'admin_not_initialized', message: 'Server admin not configured to write to Firestore' });
+  }
+  try {
+    const db = admin.firestore();
+    const toSave = Object.assign({}, payload, { created_at: admin.firestore.FieldValue.serverTimestamp() });
+    const docRef = await db.collection('report').add(toSave);
+    return res.json({ ok: true, id: docRef.id });
+  } catch (e) {
+    console.error('Failed to save report:', e && e.message);
+    return res.status(500).json({ error: 'save_failed' });
+  }
+});
 const THAIHEALTH_RSS = 'https://www.thaihealth.or.th/category/%E0%B8%82%E0%B9%88%E0%B8%B2%E0%B8%A7%E0%B8%AA%E0%B8%A3%E0%B9%89%E0%B8%B2%E0%B8%87%E0%B8%AA%E0%B8%B8%E0%B8%82/%E0%B8%82%E0%B9%88%E0%B8%B2%E0%B8%A7%E0%B8%AA%E0%B8%B8%E0%B8%82%E0%B8%A0%E0%B8%B2%E0%B8%9E/feed/';
 
 // keywords to filter articles about e-cigarettes / บุหรี่ไฟฟ้า

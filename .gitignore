@@ -10,3 +10,5 @@ npm-debug.log
 yarn-error.log
 recovered-src/
 dist/
+# Firebase admin service account (keep private)
+backend/serviceAccountKey.json

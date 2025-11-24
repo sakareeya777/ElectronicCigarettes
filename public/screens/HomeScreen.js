@@ -106,8 +106,9 @@ export default function HomeScreen() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [noRelated, setNoRelated] = useState(false);
+  const [backendOriginState, setBackendOriginState] = useState(null);
 
-  const NEWS_ENDPOINT = process.env.NEWS_ENDPOINT || 'https://electroniccigarettes.onrender.com/';
+  const NEWS_ENDPOINT = process.env.NEWS_ENDPOINT || 'https://electroniccigarettes.onrender.com/news/thaihealth';
 
   useEffect(() => {
     let mounted = true;
@@ -132,6 +133,15 @@ export default function HomeScreen() {
           const mapped = data.items.map(i => {
             // Use a robust extractor that looks into enclosure, media, HTML content, etc.
             let thumb = extractThumbnail(i);
+
+            if (thumb && !/^(https?:)?\/\//i.test(thumb)) {
+              try {
+                const base = i.link || i.url || 'https://www.thaihealth.or.th/';
+                thumb = new URL(thumb, base).toString();
+              } catch (e) {
+                // leave as-is if URL resolution fails
+              }
+            }
 
             try {
               if (thumb) {
@@ -160,6 +170,13 @@ export default function HomeScreen() {
           } else {
             setNoRelated(false);
             setNews(mapped);
+            // persist backend origin so renderItem can use proxy fallback when images fail
+            try {
+              const bo = (() => {
+                try { return new URL(NEWS_ENDPOINT).origin; } catch (e) { return NEWS_ENDPOINT.replace(/\/news.*$/, '') || NEWS_ENDPOINT; }
+              })();
+              setBackendOriginState(bo);
+            } catch (e) { /* ignore */ }
           }
         }
       } catch (e) {
@@ -191,6 +208,41 @@ export default function HomeScreen() {
   const bannerSources = (news || []).slice(0, 3).map(n => n.thumbnail).filter(t => isValidThumb(t));
   const banners = bannerSources.length ? bannerSources : bannerImages;
 
+  // Small helper image component that will attempt a proxy URL on error
+  function RemoteImage({ uri, style }) {
+    const [src, setSrc] = useState(uri || null);
+    const [triedProxy, setTriedProxy] = useState(false);
+    const [failed, setFailed] = useState(false);
+
+    useEffect(() => {
+      setSrc(uri || null);
+      setTriedProxy(false);
+      setFailed(false);
+    }, [uri]);
+
+    const onError = () => {
+      if (!triedProxy && src && backendOriginState) {
+        // try using backend thumbnail proxy
+        try {
+          const proxied = `${backendOriginState}/thumb?url=${encodeURIComponent(src)}`;
+          setTriedProxy(true);
+          setSrc(proxied);
+          return;
+        } catch (e) {
+          // fall through to failed state
+        }
+      }
+      setFailed(true);
+    };
+
+    if (!src || failed) {
+      // show a neutral placeholder view instead of local sabanoor image
+      return <View style={[style, { backgroundColor: '#f0f0f0', justifyContent: 'center', alignItems: 'center' }]} />;
+    }
+
+    return <Image source={{ uri: src }} style={style} onError={onError} />;
+  }
+
   // render card
   const renderItem = ({ item }) => {
     // normalize thumbnail: accept only valid http(s) urls, otherwise try youtube thumb
@@ -198,12 +250,10 @@ export default function HomeScreen() {
     const thumbUri = isValidThumb(raw) ? raw : (getYoutubeThumbnail(item && item.url ? item.url : '') || null);
     return (
       <TouchableOpacity style={styles.smallCard} onPress={() => Linking.openURL(item.url)}>
-        {thumbUri ? (
-          <Image source={{ uri: thumbUri }} style={styles.smallThumb} />
-        ) : (
-          // fallback to bundled local image so the card never appears blank
-          <Image source={require('../assets/sabanoor.jpg')} style={styles.smallThumb} />
-        )}
+        {
+          // use RemoteImage which will try proxying on error and otherwise show neutral placeholder
+        }
+        <RemoteImage uri={thumbUri} style={styles.smallThumb} />
         <Text style={styles.smallTitle} numberOfLines={2}>{item.title}</Text>
       </TouchableOpacity>
     );

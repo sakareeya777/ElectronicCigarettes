@@ -2,6 +2,7 @@
 // Replace the placeholder values with your real Firebase project config
 import { initializeApp } from 'firebase/app'
 import { getAuth } from 'firebase/auth'
+import { getFirestore, collection, getDocs } from 'firebase/firestore/lite'
 
 const firebaseConfig = {
   apiKey: process.env.FIREBASE_API_KEY || "AIzaSyD43MgACRNs0Sx1ByuZdTK-Xq3zRl5-xGw",
@@ -15,5 +16,15 @@ const firebaseConfig = {
 
 const app = initializeApp(firebaseConfig)
 const auth = getAuth(app)
+const db = getFirestore(app);
 
-export { auth }
+async function getReport(db) {
+  const report = collection(db, 'report');
+  const reportSnapshot = await getDocs(report);
+  const reportList = reportSnapshot.docs.map(doc => doc.data());
+  return reportList;
+}
+
+// Export the auth object and the getReport helper.
+// Avoid top-level await so the module can be bundled by older toolchains.
+export { auth, getReport }
