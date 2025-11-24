@@ -12,3 +12,4 @@ recovered-src/
 dist/
 # Firebase admin service account (keep private)
 backend/serviceAccountKey.json
+backend/temp.json

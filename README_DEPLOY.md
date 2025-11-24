@@ -136,6 +136,20 @@ firebase deploy --only hosting
 - A: เตรียม `README_DEPLOY.md` (ไฟล์นี้) และคำสั่งทั้งหมดให้คุณรันทีละบรรทัดบนเครื่อง — คุณรันแล้วส่งผลลัพธ์มา ผมช่วยแก้ปัญหาเฉพาะจุด
 - B: ผมสร้างตัวช่วยใน repo (เช่น `deploy-scripts.ps1`) ที่รันคำสั่งสำคัญได้อัตโนมัติ แล้วคุณรันสคริปต์เดียว — ถ้าต้องการผมจะเพิ่ม
 
+-- สคริปต์ช่วยดีพลอย (PowerShell)
+
+ผมเพิ่ม `deploy-scripts.ps1` ไว้ที่ root ของ repo เพื่อช่วยตั้ง `NEWS_ENDPOINT` (อ่านจาก `.env` หรือพารามิเตอร์), สร้าง production build และ (ถ้ามี `firebase.json`) จะถามว่าจะ deploy ไป Firebase Hosting หรือไม่
+
+ตัวอย่างเรียกใช้งาน (PowerShell):
+
+```powershell
+# จาก root ของโปรเจค
+.\deploy-scripts.ps1 -BackendUrl 'https://electroniccigarettes.onrender.com'
+```
+
+ถ้าคุณไม่ระบุ `-BackendUrl` สคริปต์จะอ่านค่า `NEWS_ENDPOINT` จากไฟล์ `.env` (ถ้ามี) หรือใช้ค่าเริ่มต้น
+
+
 บอกผมว่าคุณต้องการวิธีไหนและถ้าต้องการผมจะเพิ่มสคริปต์หรือไฟล์ config ให้ทันที
 
 ---

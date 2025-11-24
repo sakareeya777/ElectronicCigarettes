@@ -6,6 +6,7 @@ const { URL } = require('url');
 const fs = require('fs');
 const fsp = require('fs').promises;
 const path = require('path');
+const os = require('os');
 const crypto = require('crypto');
 const admin = require('firebase-admin');
 
@@ -13,23 +14,57 @@ const admin = require('firebase-admin');
 let adminInitialized = false;
 try {
   const saPath = path.join(__dirname, 'serviceAccountKey.json');
-  if (fs.existsSync(saPath)) {
+  // Priority: SERVICE_ACCOUNT_JSON env var (JSON string), GOOGLE_APPLICATION_CREDENTIALS path, then local file
+  if (process.env.SERVICE_ACCOUNT_JSON || process.env.SERVICE_ACCOUNT) {
+    // allow providers to store the service account JSON as an env var
+    const raw = process.env.SERVICE_ACCOUNT_JSON || process.env.SERVICE_ACCOUNT;
+    const serviceAccount = typeof raw === 'string' ? JSON.parse(raw) : raw;
+    admin.initializeApp({ credential: admin.credential.cert(serviceAccount) });
+    adminInitialized = true;
+    console.log('firebase-admin initialized from SERVICE_ACCOUNT_JSON env var');
+  } else if (process.env.SERVICE_ACCOUNT_BASE64) {
+    // some platforms make it easier to store the JSON as base64
+    try {
+      const raw = Buffer.from(process.env.SERVICE_ACCOUNT_BASE64, 'base64').toString('utf8');
+      const serviceAccount = JSON.parse(raw);
+      admin.initializeApp({ credential: admin.credential.cert(serviceAccount) });
+      adminInitialized = true;
+      console.log('firebase-admin initialized from SERVICE_ACCOUNT_BASE64 env var');
+    } catch (be) {
+      console.warn('Failed to parse SERVICE_ACCOUNT_BASE64:', be && be.message);
+    }
+  } else if (process.env.GOOGLE_APPLICATION_CREDENTIALS && fs.existsSync(process.env.GOOGLE_APPLICATION_CREDENTIALS)) {
+    const serviceAccount = require(process.env.GOOGLE_APPLICATION_CREDENTIALS);
+    admin.initializeApp({ credential: admin.credential.cert(serviceAccount) });
+    adminInitialized = true;
+    console.log('firebase-admin initialized from GOOGLE_APPLICATION_CREDENTIALS path');
+  } else if (fs.existsSync(saPath)) {
     const serviceAccount = require(saPath);
     admin.initializeApp({ credential: admin.credential.cert(serviceAccount) });
     adminInitialized = true;
     console.log('firebase-admin initialized from', saPath);
   } else {
-    console.log('No serviceAccountKey.json found at backend/serviceAccountKey.json — firebase-admin not initialized');
+    console.log('No serviceAccountKey.json found and no SERVICE_ACCOUNT_JSON/GOOGLE_APPLICATION_CREDENTIALS provided — firebase-admin not initialized');
   }
 } catch (e) {
   console.warn('Failed to initialize firebase-admin:', e && e.message);
 }
+
+// Log admin initialization status for easier debugging on deploy
+console.log('firebase-admin initialized =', !!adminInitialized);
+
+// Health endpoint to check service status (useful for platform health checks)
+// (registered after `app` is created below)
 
 const CACHE_DIR = path.join(__dirname, 'cache');
 // ensure cache dir exists
 try { fs.mkdirSync(CACHE_DIR, { recursive: true }); } catch (e) { /* ignore */ }
 
 const app = express();
+// Health endpoint to check service status (useful for platform health checks)
+app.get('/health', (req, res) => {
+  res.json({ ok: true, adminInitialized: !!adminInitialized });
+});
 const parser = new Parser();
 const PORT = process.env.PORT || 3001;
 
@@ -95,10 +130,30 @@ app.post('/reports', async (req, res) => {
   if (!payload.type || !payload.date || !payload.time || !payload.description) {
     return res.status(400).json({ error: 'missing_fields', message: 'type, date, time, description are required' });
   }
+  // If admin isn't initialized, fall back to writing to a local file (development fallback)
   if (!adminInitialized) {
-    // If admin not initialized, return 503 so frontend can surface error
-    return res.status(503).json({ error: 'admin_not_initialized', message: 'Server admin not configured to write to Firestore' });
+    try {
+      // Use system temp directory for fallback storage (safer on some platforms)
+      const filePath = path.join(os.tmpdir(), 'ecig_reports_fallback.json');
+      let arr = [];
+      try {
+        const raw = await fsp.readFile(filePath, 'utf8');
+        arr = JSON.parse(raw || '[]');
+      } catch (re) {
+        // file missing or invalid -> start with empty array
+        arr = [];
+      }
+      const rec = Object.assign({}, payload, { created_at: new Date().toISOString(), fallback: true });
+      arr.unshift(rec);
+      await fsp.writeFile(filePath, JSON.stringify(arr, null, 2), 'utf8');
+  console.log('Saved report to fallback file:', filePath);
+      return res.json({ ok: true, fallback: 'file', savedCount: arr.length, fallbackPath: filePath });
+    } catch (fw) {
+      console.error('Failed to save report to temp.json', fw && fw.message);
+      return res.status(503).json({ error: 'admin_not_initialized', message: 'Server admin not configured to write to Firestore. Provide SERVICE_ACCOUNT_JSON (or SERVICE_ACCOUNT_BASE64) in environment or place a serviceAccountKey.json in backend/ on deploy.' });
+    }
   }
+
   try {
     const db = admin.firestore();
     const toSave = Object.assign({}, payload, { created_at: admin.firestore.FieldValue.serverTimestamp() });

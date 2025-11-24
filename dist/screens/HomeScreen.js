@@ -282,18 +282,6 @@ export default function HomeScreen() {
         <Search />
       </View>
 
-      {/* Categories row */}
-      <View style={styles.categoriesRow}>
-        <TouchableOpacity style={styles.categoryBtn}>
-          <Text style={styles.categoryIcon}>🎮</Text>
-          <Text style={styles.categoryText}>เกม</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.categoryBtn}>
-          <Text style={styles.categoryIcon}>🟡</Text>
-          <Text style={styles.categoryText}>คะแนน</Text>
-        </TouchableOpacity>
-      </View>
-
       {loading ? (
         <View style={{padding:20}}>
           <ActivityIndicator size="large" color="#229954" />

@@ -25,6 +25,5 @@ async function getReport(db) {
   return reportList;
 }
 
-// Export the auth object and the getReport helper.
-// Avoid top-level await so the module can be bundled by older toolchains.
-export { auth, getReport }
+export { auth, getReport };
+
