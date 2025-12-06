@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { View, Text, StyleSheet, TextInput, TouchableOpacity, Image, Modal, ScrollView, Platform } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { MdReport, MdAddAPhoto } from 'react-icons/md';
+import { database, ref, set } from '../firebase/firebaseConfig';
 
 export default function FormScreen() {
   const [location, setLocation] = useState('');
@@ -137,23 +138,34 @@ export default function FormScreen() {
     const submit = async () => {
       try {
         setSubmitting(true);
-        const url = `${BACKEND_ORIGIN}/reports`;
-        console.log('Submitting report to', url, 'payload=', payload);
-        const res = await fetch(url, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload),
-        });
-        if (!res.ok) {
-          const text = await res.text();
-          throw new Error(`Server error: ${res.status} ${text} (POST ${url})`);
-        }
-        const data = await res.json();
-        console.log('Server response:', data);
-        alert('ส่งรายงานเรียบร้อย! ขอบคุณสำหรับข้อมูล');
+        // Write directly to Realtime Database so frontend does not require backend server to be running
+        const key = Date.now();
+        const rec = Object.assign({}, payload, { created_at: new Date().toISOString() });
+        await set(ref(database, `reports/${key}`), rec);
+        console.log('Saved report to Realtime DB at reports/%s payload=', key, rec);
+        alert('ส่งรายงานเรียบร้อย! ข้อมูลถูกบันทึกแบบเรียลไทม์');
       } catch (e) {
-        console.error('Submit failed', e);
-        alert('ส่งรายงานไม่สำเร็จ: ' + (e.message || e));
+        console.error('Submit to RTDB failed', e);
+        // If RTDB write fails, optionally attempt backend POST as a fallback
+        try {
+          const url = `${BACKEND_ORIGIN}/reports`;
+          console.log('Falling back to POST', url, 'payload=', payload);
+          const res = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+          });
+          if (!res.ok) {
+            const text = await res.text();
+            throw new Error(`Server error: ${res.status} ${text} (POST ${url})`);
+          }
+          const data = await res.json();
+          console.log('Server response (fallback):', data);
+          alert('ส่งรายงานเรียบร้อย (ผ่าน backend fallback)');
+        } catch (e2) {
+          console.error('Fallback POST failed', e2);
+          alert('ส่งรายงานไม่สำเร็จ: ' + (e2.message || e2));
+        }
       } finally {
         setSubmitting(false);
       }

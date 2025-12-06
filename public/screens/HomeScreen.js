@@ -1,45 +1,11 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, FlatList, StyleSheet, Dimensions, Linking, TouchableOpacity, Image, ScrollView, ActivityIndicator } from 'react-native';
+import { View, Text, FlatList, StyleSheet, Dimensions, Linking, TouchableOpacity, Image, ScrollView, ActivityIndicator, Alert } from 'react-native';
 import Search from '../components/Search';
 import HamburgerMenu from '../components/HamburgerMenu';
+import { useUserAuth } from '../context/UserAuthContext';
+import { ref, onValue, database, set, get } from '../firebase/firebaseConfig';
 
 const screenWidth = Dimensions.get('window').width;
-
-// ตัวอย่างลิ้งข่าวที่คุณสามารถแก้ไขหรือเพิ่มเองได้
-const newsLinks = [
-  {
-    title: 'ผลกระทบของบุหรี่ไฟฟ้าต่อสุขภาพ',
-    description: 'อ่านรายละเอียดเกี่ยวกับผลกระทบของบุหรี่ไฟฟ้าต่อสุขภาพ',
-    url: 'https://www.youtube.com/watch?v=WQORddI6NuA&themeRefresh=1',
-  },
-  {
-    title: 'กฎหมายเกี่ยวกับบุหรี่ไฟฟ้าในประเทศไทย',
-    description: 'อัปเดตกฎหมายล่าสุดเกี่ยวกับบุหรี่ไฟฟ้า',
-    url: 'https://www.youtube.com/watch?v=koxI97ol_yk',
-  },
-  {
-    title: 'งานวิจัยใหม่เกี่ยวกับบุหรี่ไฟฟ้า',
-    description: 'สรุปงานวิจัยล่าสุดเกี่ยวกับบุหรี่ไฟฟ้า',
-    url: 'https://www.youtube.com/watch?v=q6IUGzTSw2M',
-  },
-  {
-    title: 'การรณรงค์เพื่อสุขภาพ',
-    description: 'กิจกรรมและโครงการส่งเสริมสุขภาพในชุมชน',
-    url: 'https://www.youtube.com/watch?v=q6IUGzTSw2M',
-  },
-  {
-    title: 'วิธีเลิกบุหรี่ไฟฟ้า',
-    description: 'แนวทางการเลิกบุหรี่ไฟฟ้าอย่างปลอดภัย',
-    url: 'https://www.youtube.com/watch?v=koxI97ol_yk',
-  },
-];
-
-const bannerImages = [
-  // ใช้ thumbnail ของ youtube เป็นตัวอย่าง banner
-  'https://img.youtube.com/vi/WQORddI6NuA/hqdefault.jpg',
-  'https://img.youtube.com/vi/koxI97ol_yk/hqdefault.jpg',
-  'https://img.youtube.com/vi/q6IUGzTSw2M/hqdefault.jpg',
-];
 
 const getYoutubeThumbnail = (url) => {
   // ดึงรหัสวิดีโอจาก url
@@ -101,112 +67,103 @@ const extractThumbnail = (item) => {
   return null;
 };
 
-export default function HomeScreen() {
+export default function HomeScreen({ navigation }) {
   const [news, setNews] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [noRelated, setNoRelated] = useState(false);
-  const [backendOriginState, setBackendOriginState] = useState(null);
-
-  const NEWS_ENDPOINT = process.env.NEWS_ENDPOINT || 'https://electroniccigarettes.onrender.com/news/thaihealth';
+  const { user } = useUserAuth() || {};
 
   useEffect(() => {
-    let mounted = true;
-    const load = async () => {
-      setLoading(true);
-      setError(null);
+    // debug: show current auth user in logs to verify UID used for rules check
+    try {
+      console.log('[HomeScreen] auth user:', user || null);
+      if (user && user.uid) console.log('[HomeScreen] current uid:', user.uid);
+    } catch (e) {
+      // ignore
+    }
+  }, [user]);
+
+  // Quick add form state (visible only to logged-in users)
+  const [qaTitle, setQaTitle] = useState('');
+  const [qaUrl, setQaUrl] = useState('');
+  const [qaThumb, setQaThumb] = useState('');
+  const [qaDescription, setQaDescription] = useState('');
+  const [qaLoading, setQaLoading] = useState(false);
+
+  // Use Realtime Database subscription to load news (initial load + updates)
+
+  useEffect(() => {
+    setLoading(true);
+    const newsRef = ref(database, 'news');
+    const unsubscribe = onValue(newsRef, (snapshot) => {
+      const data = snapshot.val();
+      const newsList = data ? Object.keys(data).map(key => ({ id: key, ...data[key] })) : [];
+      // If DB returns empty array, keep it empty (do not inject sample data here).
+      setNews(newsList);
+      setLoading(false);
+    }, (err) => {
+      console.error('RTDB onValue error', err);
+      // store error so UI can react (for example show a message or prompt to login)
+      setError(err && err.message);
+      // Don't automatically replace with sample news on permission errors.
+      // Instead leave `news` as-is (likely empty) and let the UI show a helpful message.
+      setLoading(false);
+    });
+
+    return () => unsubscribe(); // cleanup subscription
+  }, []);
+
+  const submitQuickAdd = async () => {
+    if (!user) { Alert.alert('Unauthorized', 'กรุณาเข้าสู่ระบบก่อนดำเนินการ'); navigation && navigation.navigate && navigation.navigate('Login'); return; }
+    if (!qaTitle.trim()) { Alert.alert('กรุณากรอกหัวข้อข่าว'); return; }
+    setQaLoading(true);
+    try {
+      console.log('[HomeScreen] submitQuickAdd uid=', user && user.uid);
+      // debug: try to fetch ID token result to inspect custom claims (admin)
       try {
-        const res = await fetch(NEWS_ENDPOINT);
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const data = await res.json();
-        // Expecting { items: [ { title, link, pubDate, contentSnippet, thumbnail } ] }
-        if (mounted && data && Array.isArray(data.items)) {
-          // Compute backend origin to use thumbnail proxy (so images are same-origin and bypass CORS/blocked remote hosts)
-          let backendOrigin = null;
-          try {
-            backendOrigin = new URL(NEWS_ENDPOINT).origin;
-          } catch (e) {
-            // fallback: strip path
-            backendOrigin = NEWS_ENDPOINT.replace(/\/news.*$/,'') || NEWS_ENDPOINT;
-          }
-
-          const mapped = data.items.map(i => {
-            // Use a robust extractor that looks into enclosure, media, HTML content, etc.
-            let thumb = extractThumbnail(i);
-
-            if (thumb && !/^(https?:)?\/\//i.test(thumb)) {
-              try {
-                const base = i.link || i.url || 'https://www.thaihealth.or.th/';
-                thumb = new URL(thumb, base).toString();
-              } catch (e) {
-                // leave as-is if URL resolution fails
-              }
-            }
-
-            try {
-              if (thumb) {
-                const u = new URL(thumb);
-                const host = u.hostname || '';
-                const problematicHosts = ['thaihealth.or.th'];
-                if (problematicHosts.includes(host)) {
-                  // compute backend origin (same logic as above)
-                  const backendOrigin = (() => {
-                    try { return new URL(NEWS_ENDPOINT).origin; } catch (e) { return NEWS_ENDPOINT.replace(/\/news.*$/, '') || NEWS_ENDPOINT; }
-                  })();
-                  thumb = `${backendOrigin}/thumb?url=${encodeURIComponent(thumb)}`;
-                }
-              }
-            } catch (e) {
-              // ignore URL parsing errors and keep original thumb
-            }
-
-            return { title: i.title, url: i.link || i.url || '#', thumbnail: thumb };
-          });
-          if (mapped.length === 0) {
-            console.warn('Feed returned 0 items, using local sample news as fallback');
-            const fallback = newsLinks.map(n => ({ title: n.title, url: n.url, thumbnail: getYoutubeThumbnail(n.url) }));
-            setNoRelated(false);
-            setNews(fallback);
-          } else {
-            setNoRelated(false);
-            setNews(mapped);
-            // persist backend origin so renderItem can use proxy fallback when images fail
-            try {
-              const bo = (() => {
-                try { return new URL(NEWS_ENDPOINT).origin; } catch (e) { return NEWS_ENDPOINT.replace(/\/news.*$/, '') || NEWS_ENDPOINT; }
-              })();
-              setBackendOriginState(bo);
-            } catch (e) { /* ignore */ }
-          }
+        if (user && typeof user.getIdTokenResult === 'function') {
+          const tr = await user.getIdTokenResult();
+          console.log('[HomeScreen] idTokenResult claims=', tr && tr.claims);
         }
-      } catch (e) {
-        console.warn('Failed to load news from endpoint, using fallback', e.message);
-        setError(e.message);
-        try {
-          const fallback = newsLinks.map(n => ({
-            title: n.title,
-            url: n.url,
-            thumbnail: getYoutubeThumbnail(n.url)
-          }));
-          if (mounted) {
-            setNews(fallback);
-            setNoRelated(false);
-          }
-        } catch (err2) {
-          // ignore fallback errors
-        }
-      } finally {
-        if (mounted) setLoading(false);
+      } catch (tokenErr) {
+        console.warn('[HomeScreen] could not getIdTokenResult', tokenErr);
       }
-    };
-    // Try fetching, but don't overwrite if it fails (keep local sample)
-    load();
-    return () => { mounted = false; };
-  }, [NEWS_ENDPOINT]);
+      // write to Realtime Database under `news/{timestamp}`
+      const key = Date.now();
+      await set(ref(database, `news/${key}`), {
+        title: qaTitle.trim(),
+        description: qaDescription.trim() || null,
+        url: qaUrl.trim() || null,
+        thumbnail: qaThumb.trim() || null,
+        createdAt: new Date().toISOString(),
+      });
+      Alert.alert('บันทึกสำเร็จ', 'เพิ่มข่าวเรียบร้อย');
+      // optimistic update: prepend to local list
+      setNews(prev => [{ id: String(key), title: qaTitle.trim(), description: qaDescription.trim() || null, url: qaUrl.trim() || '#', thumbnail: qaThumb.trim() || null }, ...prev]);
+      setQaTitle(''); setQaUrl(''); setQaThumb('');
+      setQaDescription('');
+    } catch (e) {
+      // more detailed logging for debugging permissions
+      try {
+        console.error('Quick add failed', {
+          name: e && e.name,
+          code: e && e.code,
+          message: e && e.message,
+          stack: e && e.stack,
+        });
+      } catch (logErr) {
+        console.error('Quick add failed (could not stringify)', e);
+      }
+      Alert.alert('ผิดพลาด', 'ไม่สามารถเพิ่มข่าวได้');
+    } finally {
+      setQaLoading(false);
+    }
+  };
 
-  // Banner images: prefer thumbnails from fetched news, fallback to static list
+  // Banner images: prefer thumbnails from fetched news. If none, render empty list.
   const bannerSources = (news || []).slice(0, 3).map(n => n.thumbnail).filter(t => isValidThumb(t));
-  const banners = bannerSources.length ? bannerSources : bannerImages;
+  const banners = bannerSources;
 
   // Small helper image component that will attempt a proxy URL on error
   function RemoteImage({ uri, style }) {
@@ -216,22 +173,10 @@ export default function HomeScreen() {
 
     useEffect(() => {
       setSrc(uri || null);
-      setTriedProxy(false);
-      setFailed(false);
+        setFailed(false);
     }, [uri]);
 
     const onError = () => {
-      if (!triedProxy && src && backendOriginState) {
-        // try using backend thumbnail proxy
-        try {
-          const proxied = `${backendOriginState}/thumb?url=${encodeURIComponent(src)}`;
-          setTriedProxy(true);
-          setSrc(proxied);
-          return;
-        } catch (e) {
-          // fall through to failed state
-        }
-      }
       setFailed(true);
     };
 
@@ -255,6 +200,7 @@ export default function HomeScreen() {
         }
         <RemoteImage uri={thumbUri} style={styles.smallThumb} />
         <Text style={styles.smallTitle} numberOfLines={2}>{item.title}</Text>
+        {item.description ? <Text style={styles.smallDesc} numberOfLines={2}>{item.description}</Text> : null}
       </TouchableOpacity>
     );
   };
@@ -263,7 +209,11 @@ export default function HomeScreen() {
     <View style={styles.container}>
       <View style={styles.topArea}>
         <Text style={styles.header}>ข่าวสาร</Text>
-        <HamburgerMenu />
+        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+          <AuthAdminButton navigation={navigation} />
+          <View style={{ width: 8 }} />
+          <HamburgerMenu />
+        </View>
       </View>
 
       {/* Banner horizontal */}
@@ -312,10 +262,60 @@ export default function HomeScreen() {
   );
 }
 
+function AuthAdminButton({ navigation }) {
+  const { user } = useUserAuth() || {};
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [isCheckingAdmin, setIsCheckingAdmin] = useState(true);
+
+  useEffect(() => {
+    let mounted = true;
+    const check = async () => {
+      if (!user) {
+        if (mounted) setIsAdmin(false);
+        return;
+      }
+        try {
+          // Quick admin check via Realtime Database: admins/{uid} = true
+          if (mounted) setIsCheckingAdmin(true);
+          const adminRef = ref(database, `admins/${user.uid}`);
+          const snap = await get(adminRef);
+          const ok = snap && snap.exists() && !!snap.val();
+          if (mounted) setIsAdmin(!!ok);
+        } catch (e) {
+          console.warn('[AuthAdminButton] could not read admin flag from RTDB', e);
+          if (mounted) setIsAdmin(false);
+        } finally {
+          if (mounted) setIsCheckingAdmin(false);
+        }
+    };
+    check();
+    console.log('[AuthAdminButton] user at render', user);
+    return () => { mounted = false; };
+  }, [user]);
+
+  // If not logged in, render nothing
+  if (!user) return null;
+
+  // While checking admin flag, don't render any admin/account button to avoid flicker
+  if (isCheckingAdmin) return null;
+
+  if (isAdmin) {
+    return (
+      <TouchableOpacity onPress={() => navigation && navigation.navigate && navigation.navigate('AdminManageNews')} style={styles.adminBtn}>
+        <Text style={{ color: '#fff', fontWeight: '700' }}>Admin</Text>
+      </TouchableOpacity>
+    );
+  }
+
+  // Logged-in but not admin -> do not render admin/account button
+  return null;
+}
+
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#FDEEF2' },
   topArea: { marginTop: 16, paddingHorizontal: 16, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   header: { fontSize: 18, fontWeight: '700' },
+  adminBtn: { backgroundColor: '#ff5a5f', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8 },
   bannerWrap: { marginTop: 12, paddingLeft: 12 },
   bannerImage: { width: screenWidth - 64, height: 140, borderRadius: 12, marginRight: 12, backgroundColor: '#eee' },
   searchWrap: { paddingHorizontal: 16, marginTop: 14 },
@@ -327,4 +327,5 @@ const styles = StyleSheet.create({
   smallCard: { backgroundColor: '#fff', borderRadius: 10, overflow: 'hidden', width: (screenWidth - 40) / 2, marginBottom: 12, elevation: 2, paddingBottom: 8 },
   smallThumb: { width: '100%', height: 100, backgroundColor: '#eee' },
   smallTitle: { paddingHorizontal: 8, paddingTop: 8, fontSize: 13, color: '#333', fontWeight: '600' },
+  smallDesc: { paddingHorizontal: 8, paddingTop: 4, fontSize: 12, color: '#666' },
 });
