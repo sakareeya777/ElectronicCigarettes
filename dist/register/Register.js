@@ -72,6 +72,11 @@ export default function RegisterScreen({ navigation }) {
 
   return (
     <View style={styles.container}>
+      {/* เพิ่มปุ่มกลับ */}
+      <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
+        <Text style={styles.backText}>← กลับ</Text>
+      </TouchableOpacity>
+
       <Image source={sabanoorImg} style={styles.logo} />
       <Text style={styles.title}>Create Account</Text>
       <TextInput
@@ -188,5 +193,21 @@ const styles = StyleSheet.create({
   },
   msgSuccess: {
     backgroundColor: '#2ecc71',
+  },
+
+  // เพิ่มสไตล์สำหรับปุ่มกลับ
+  backButton: {
+    position: 'absolute',
+    top: 12,
+    left: 12,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    backgroundColor: 'transparent',
+    zIndex: 10,
+  },
+  backText: {
+    color: '#7AC143',
+    fontWeight: 'bold',
+    fontSize: 16,
   }
 });

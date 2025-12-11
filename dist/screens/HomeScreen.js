@@ -75,13 +75,7 @@ export default function HomeScreen({ navigation }) {
   const { user } = useUserAuth() || {};
 
   useEffect(() => {
-    // debug: show current auth user in logs to verify UID used for rules check
-    try {
-      console.log('[HomeScreen] auth user:', user || null);
-      if (user && user.uid) console.log('[HomeScreen] current uid:', user.uid);
-    } catch (e) {
-      // ignore
-    }
+    // intentionally no verbose auth logging in production
   }, [user]);
 
   // Quick add form state (visible only to logged-in users)
@@ -118,16 +112,14 @@ export default function HomeScreen({ navigation }) {
     if (!user) { Alert.alert('Unauthorized', 'กรุณาเข้าสู่ระบบก่อนดำเนินการ'); navigation && navigation.navigate && navigation.navigate('Login'); return; }
     if (!qaTitle.trim()) { Alert.alert('กรุณากรอกหัวข้อข่าว'); return; }
     setQaLoading(true);
-    try {
-      console.log('[HomeScreen] submitQuickAdd uid=', user && user.uid);
-      // debug: try to fetch ID token result to inspect custom claims (admin)
+      try {
+      // do not log user tokens or IDs here (sensitive)
       try {
         if (user && typeof user.getIdTokenResult === 'function') {
-          const tr = await user.getIdTokenResult();
-          console.log('[HomeScreen] idTokenResult claims=', tr && tr.claims);
+          await user.getIdTokenResult();
         }
       } catch (tokenErr) {
-        console.warn('[HomeScreen] could not getIdTokenResult', tokenErr);
+        console.warn('[HomeScreen] could not getIdTokenResult');
       }
       // write to Realtime Database under `news/{timestamp}`
       const key = Date.now();
@@ -289,7 +281,6 @@ function AuthAdminButton({ navigation }) {
         }
     };
     check();
-    console.log('[AuthAdminButton] user at render', user);
     return () => { mounted = false; };
   }, [user]);
 

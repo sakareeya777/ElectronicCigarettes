@@ -4,18 +4,45 @@ import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as FileSystem from 'expo-file-system';
 import { addPhoto, getLastPhoto } from '../utils/storage';
 
-// Component หลักสำหรับแสดงกล้องถ่ายรูป
 export default function CameraViewScreen({ onPhotoSaved, onOpenGallery }) {
-  const camRef = useRef(null); // อ้างอิงกล้อง
-  const [permission, requestPermission] = useCameraPermissions(); // จัดการสิทธิ์กล้อง
-  const [ready, setReady] = useState(false); // สถานะกล้องพร้อมใช้งาน
-  const [facing, setFacing] = useState('back'); // กล้องหน้า/หลัง
-  const [thumb, setThumb]   = useState(null);   // รูปถ่ายล่าสุด (thumbnail)
+  const camRef = useRef(null);
+  const videoRef = useRef(null); // สำหรับ Web
+  const canvasRef = useRef(null); // สำหรับ Web
 
-  // ขอสิทธิ์กล้องและโหลดรูปถ่ายล่าสุดเมื่อ mount
+  const [permission, requestPermission] = useCameraPermissions();
+  const [ready, setReady] = useState(false);
+  const [facing, setFacing] = useState('back');
+  const [thumb, setThumb] = useState(null);
+
+  //-------------------------------------------------------------------
+  // โหลดกล้อง Web (video tag)
+  //-------------------------------------------------------------------
+  useEffect(() => {
+    if (Platform.OS === 'web') {
+      initWebCam();
+    }
+  }, []);
+
+  const initWebCam = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: facing === 'back' ? 'environment' : 'user' }
+      });
+
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+      }
+    } catch (e) {
+      alert("ไม่สามารถเปิดกล้องบนเว็บได้: " + e.message);
+    }
+  };
+
+  //-------------------------------------------------------------------
+  // โหลดรูปล่าสุด
+  //-------------------------------------------------------------------
   useEffect(() => {
     (async () => {
-      if (!permission?.granted) {
+      if (Platform.OS !== "web" && !permission?.granted) {
         await requestPermission();
       }
       const last = await getLastPhoto();
@@ -23,76 +50,140 @@ export default function CameraViewScreen({ onPhotoSaved, onOpenGallery }) {
     })();
   }, [permission]);
 
-  // ถ้ายังไม่ได้รับ permission ใด ๆ
-  if (!permission) return <View style={{ flex: 1, backgroundColor: '#000' }} />;
+  //-------------------------------------------------------------------
+  // ถ้า Mobile แต่ยังไม่ได้รับสิทธิ์กล้อง
+  //-------------------------------------------------------------------
+  if (Platform.OS !== "web") {
+    if (!permission) return <View style={{ flex: 1, backgroundColor: '#000' }} />;
 
-  // ถ้ายังไม่ได้รับอนุญาตให้ใช้กล้อง
-  if (!permission.granted) {
-    return (
-      <View style={styles.center}>
-        <Text style={{ color: '#fff', marginBottom: 8 }}>
-          ต้องการสิทธิ์การใช้กล้อง
-        </Text>
-        <TouchableOpacity style={styles.btnPrimary} onPress={requestPermission}>
-          <Text style={styles.btnPrimaryText}>อนุญาต</Text>
-        </TouchableOpacity>
-      </View>
-    );
+    if (!permission.granted) {
+      return (
+        <View style={styles.center}>
+          <Text style={{ color: '#fff', marginBottom: 8 }}>ต้องการสิทธิ์การใช้กล้อง</Text>
+          <TouchableOpacity style={styles.btnPrimary} onPress={requestPermission}>
+            <Text style={styles.btnPrimaryText}>อนุญาต</Text>
+          </TouchableOpacity>
+        </View>
+      );
+    }
   }
 
-  // ฟังก์ชันสลับกล้องหน้า/หลัง
-  const toggleFacing = () => setFacing((f) => (f === 'back' ? 'front' : 'back'));
+  //-------------------------------------------------------------------
+  // สลับกล้อง (mobile + web)
+  //-------------------------------------------------------------------
+  const toggleFacing = () => {
+    setFacing((f) => (f === 'back' ? 'front' : 'back'));
 
-  // ฟังก์ชันถ่ายรูปและบันทึกไฟล์
-  const takePicture = async () => {
+    if (Platform.OS === "web") {
+      initWebCam(); // reload video stream
+    }
+  };
+
+  //-------------------------------------------------------------------
+  // ถ่ายรูปบน iOS / Android
+  //-------------------------------------------------------------------
+  const takePictureMobile = async () => {
     try {
       if (!camRef.current || !ready) return;
-      const shot = await camRef.current.takePictureAsync();
+
+      const shot = await camRef.current.takePhoto({
+        quality: 1,
+        skipProcessing: false
+      });
+
       const filename = `photo_${Date.now()}.jpg`;
-
-      if (Platform.OS === 'web') {
-        Alert.alert('ไม่รองรับ', 'ฟีเจอร์นี้ใช้ได้เฉพาะบนมือถือ');
-        return;
-      }
-
       const dest = FileSystem.documentDirectory + filename;
+
       await FileSystem.copyAsync({ from: shot.uri, to: dest });
       await addPhoto(dest);
+
       setThumb(dest);
       onPhotoSaved?.(dest);
-      Alert.alert('สำเร็จ', 'บันทึกรูปไว้ในเครื่องแล้ว');
+
+      Alert.alert("สำเร็จ", "บันทึกรูปลงเครื่องแล้ว (Mobile)");
     } catch (e) {
       console.error(e);
-      Alert.alert('ผิดพลาด', 'ถ่ายหรือบันทึกรูปไม่สำเร็จ');
+      Alert.alert("ผิดพลาด", "ถ่ายรูปไม่สำเร็จ");
     }
+  };
+
+  //-------------------------------------------------------------------
+  // ถ่ายรูปบน Web + บันทึกลงเครื่องอัตโนมัติ
+  //-------------------------------------------------------------------
+  const takePictureWeb = () => {
+    try {
+      const video = videoRef.current;
+      const canvas = canvasRef.current;
+      const ctx = canvas.getContext("2d");
+
+      // กำหนดขนาดตามกล้องจริง
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+
+      // capture frame
+      ctx.drawImage(video, 0, 0);
+
+      // ได้ base64
+      const dataURL = canvas.toDataURL("image/jpeg", 1.0);
+      setThumb(dataURL);
+      onPhotoSaved?.(dataURL);
+
+      //----------------------------------------------------------------
+      // ⭐ บันทึกรูปลงเครื่อง (ไฟล์จริง) ⭐
+      //----------------------------------------------------------------
+      fetch(dataURL)
+        .then(res => res.blob())
+        .then(blob => {
+          const url = window.URL.createObjectURL(blob);
+          const a = document.createElement("a");
+
+          a.href = url;
+          a.download = `photo_${Date.now()}.jpg`; // ชื่อไฟล์
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
+
+          window.URL.revokeObjectURL(url);
+        });
+
+      alert("บันทึกรูปลงเครื่องแล้ว (Web)");
+
+    } catch (e) {
+      alert("ถ่ายรูปบนเว็บล้มเหลว: " + e.message);
+    }
+  };
+
+  //-------------------------------------------------------------------
+  // ตัวเลือกแพลตฟอร์ม
+  //-------------------------------------------------------------------
+  const takePicture = () => {
+    if (Platform.OS === "web") takePictureWeb();
+    else takePictureMobile();
   };
 
   return (
     <View style={styles.root}>
-      {/* กล้องแสดงผลเต็มจอ */}
-      <CameraView
-        ref={camRef}
-        style={styles.camera}
-        facing={facing}
-        onCameraReady={() => setReady(true)}
-      >
-        {/* เส้นมุมโฟกัส 4 มุม */}
-        <View style={styles.focusWrap}>
-          <Corner style={[styles.corner, styles.topLeft]} />
-          <Corner style={[styles.corner, styles.topRight]} />
-          <Corner style={[styles.corner, styles.bottomLeft]} />
-          <Corner style={[styles.corner, styles.bottomRight]} />
-        </View>
-      </CameraView>
 
-      {/* แถบปุ่มด้านล่าง */}
+      {/* MOBILE CAMERA */}
+      {Platform.OS !== "web" ? (
+        <CameraView
+          ref={camRef}
+          style={styles.camera}
+          facing={facing}
+          onCameraReady={() => setReady(true)}
+        />
+      ) : (
+        // WEB CAMERA
+        <View style={styles.webCamContainer}>
+          <video ref={videoRef} autoPlay playsInline style={styles.webVideo} />
+          <canvas ref={canvasRef} style={{ display: "none" }} />
+        </View>
+      )}
+
+      {/* UI ด้านล่าง */}
       <View style={styles.bottomBar}>
-        {/* ปุ่มรูปย่อ (เปิดแกลเลอรี่) */}
-        <TouchableOpacity
-          style={styles.thumbWrap}
-          onPress={onOpenGallery}
-          activeOpacity={0.7}
-        >
+        {/* รูปย่อ */}
+        <TouchableOpacity style={styles.thumbWrap} onPress={onOpenGallery}>
           {thumb ? (
             <Image source={{ uri: thumb }} style={styles.thumb} />
           ) : (
@@ -103,65 +194,50 @@ export default function CameraViewScreen({ onPhotoSaved, onOpenGallery }) {
         </TouchableOpacity>
 
         {/* ปุ่มชัตเตอร์ */}
-        <TouchableOpacity style={styles.shutterOuter} onPress={takePicture} activeOpacity={0.8}>
-          <View style={styles.shutterInner}>
-            {/* วงกลมชัตเตอร์ */}
-          </View>
+        <TouchableOpacity style={styles.shutterOuter} onPress={takePicture}>
+          <View style={styles.shutterInner} />
         </TouchableOpacity>
 
         {/* ปุ่มสลับกล้อง */}
         <TouchableOpacity style={styles.roundBtn} onPress={toggleFacing}>
-          <Text style={{ color: '#fff', fontSize: 18 }}>🔄</Text>
+          <Text style={{ color: '#fff', fontSize: 20 }}>🔄</Text>
         </TouchableOpacity>
       </View>
     </View>
   );
 }
 
-/** เส้นมุมโฟกัส (ใช้ตกแต่ง UI) */
-function Corner({ style }) {
-  return <View style={style} />;
-}
-
 const SIZE = 74;
 
-// สไตล์ทั้งหมดของ component
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: '#000' },
-  center: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#000' },
 
   camera: { flex: 1 },
 
-  focusWrap: {
+  webCamContainer: {
     flex: 1,
-    position: 'relative',
+    backgroundColor: "#000",
+    alignItems: "center",
+    justifyContent: "center"
   },
-  corner: {
-    position: 'absolute',
-    width: 36,
-    height: 36,
-    borderColor: '#fff',
+
+  webVideo: {
+    width: "100%",
+    height: "100%",
+    objectFit: "cover",
   },
-  topLeft:     { top: 50, left: 24, borderTopWidth: 3, borderLeftWidth: 3, borderRadius: 4 },
-  topRight:    { top: 50, right: 24, borderTopWidth: 3, borderRightWidth: 3, borderRadius: 4 },
-  bottomLeft:  { bottom: 150, left: 24, borderBottomWidth: 3, borderLeftWidth: 3, borderRadius: 4 },
-  bottomRight: { bottom: 150, right: 24, borderBottomWidth: 3, borderRightWidth: 3, borderRadius: 4 },
 
   bottomBar: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: 0,
-    paddingHorizontal: 18,
-    paddingVertical: 12,
-    backgroundColor: 'rgba(0,0,0,0.45)',
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    position: "absolute", bottom: 0, left: 0, right: 0,
+    padding: 14,
+    backgroundColor: "rgba(0,0,0,0.4)",
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center"
   },
 
-  thumbWrap: { width: SIZE, height: SIZE, borderRadius: 12, overflow: 'hidden', backgroundColor: '#111' },
-  thumb:     { width: '100%', height: '100%' },
+  thumbWrap: { width: SIZE, height: SIZE, borderRadius: 12, overflow: 'hidden' },
+  thumb: { width: '100%', height: '100%' },
   thumbPlaceholder: { flex: 1, alignItems: 'center', justifyContent: 'center' },
 
   shutterOuter: {
@@ -173,15 +249,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+
   shutterInner: {
     width: SIZE,
     height: SIZE,
     borderRadius: SIZE / 2,
     backgroundColor: '#fff',
-    alignItems: 'center',
-    justifyContent: 'center',
   },
-  shutterIcon: { color: '#000', fontSize: 18, fontWeight: '700' },
 
   roundBtn: {
     width: SIZE,
@@ -190,11 +264,22 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: '#fff',
     alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(0,0,0,0.35)',
+    justifyContent: 'center'
   },
 
-  // ปุ่มอนุญาต
-  btnPrimary: { backgroundColor: '#007AFF', paddingHorizontal: 16, paddingVertical: 10, borderRadius: 10 },
-  btnPrimaryText: { color: '#fff', fontWeight: '700' },
+  center: {
+    flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#000'
+  },
+
+  btnPrimary: {
+    backgroundColor: '#007AFF',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 10
+  },
+
+  btnPrimaryText: {
+    color: '#fff',
+    fontWeight: '700'
+  }
 });
