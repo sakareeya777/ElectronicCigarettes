@@ -1,10 +1,17 @@
 rules_version = '2';
 service cloud.firestore {
-  match /databases/{database}/documents {
-    match /news/{docId} {
-      allow read: if true;
-      allow write: if request.auth != null; // อนุญาตให้ผู้ใช้ที่ล็อกอินเขียนข้อมูลได้
-    }
-    // เพิ่มกฎอื่นตามต้องการ
-  }
+match /databases/{database}/documents {
+match /news/{docId} {
+allow read: if true;
+allow write: if request.auth != null && request.auth.token.admin == true;
+}
+match /reportc/{docId} {
+allow read: if true;
+allow write: if request.auth != null;
+}
+match /authen/{docId} {
+allow read: if true;
+allow write: if request.auth != null;
+}
+}
 }

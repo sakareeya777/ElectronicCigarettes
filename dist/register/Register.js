@@ -3,6 +3,7 @@ import { View, Text, TextInput, TouchableOpacity, Image, StyleSheet } from "reac
 import axios from "axios";
 import { useUserAuth } from "../context/UserAuthContext";
 import { getAuth, updateProfile } from "firebase/auth";
+import { database, ref, set } from '../firebase/firebaseConfig';
 const sabanoorImg = require('../assets/sabanoor.jpg');
 
 export default function RegisterScreen({ navigation }) {
@@ -46,10 +47,26 @@ export default function RegisterScreen({ navigation }) {
     }
     try {
       const userCredential = await signup(normalizedEmail, password);
+      const user = userCredential && userCredential.user;
       // Set displayName for the new user
       const auth = getAuth();
       if (auth.currentUser) {
         await updateProfile(auth.currentUser, { displayName: name });
+      }
+      // Write basic profile to Realtime Database under /authen/{uid}
+      try {
+        if (user && user.uid) {
+          const profile = {
+            uid: user.uid,
+            email: user.email || null,
+            displayName: name || null,
+            role: 'user',
+            createdAt: new Date().toISOString()
+          };
+          await set(ref(database, `authen/${user.uid}`), profile);
+        }
+      } catch (e) {
+        console.warn('Failed to write authen profile to RTDB', e && e.message);
       }
       setMessage("สมัครสมาชิกสำเร็จ! สามารถเข้าสู่ระบบได้แล้ว");
       setMessageType("success");

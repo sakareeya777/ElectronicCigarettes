@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert, ActivityIndicator } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert, ActivityIndicator, Platform } from 'react-native';
 import { ref, get, update } from 'firebase/database';
 import { database } from '../firebase/firebaseConfig';
 import { useUserAuth } from '../context/UserAuthContext';
@@ -72,11 +72,24 @@ export default function AdminEditNews({ route, navigation }) {
     }
   };
 
+  function handleBack() {
+    try {
+      if (navigation && typeof navigation.goBack === 'function') return navigation.goBack();
+      if (Platform.OS === 'web' && typeof window !== 'undefined' && window.history && window.history.length) return window.history.back();
+    } catch (e) {
+      console.warn('Back navigation failed', e);
+    }
+  }
+
   if (loading) return <View style={{flex:1,justifyContent:'center',alignItems:'center'}}><ActivityIndicator size="large" color="#229954"/></View>;
 
   return (
     <View style={styles.container}>
-      <Text style={styles.header}>แก้ไขข่าว</Text>
+      <View style={styles.headerRow}>
+        <TouchableOpacity style={styles.backBtn} onPress={handleBack}><Text style={styles.backText}>กลับ</Text></TouchableOpacity>
+        <Text style={styles.header}>แก้ไขข่าว</Text>
+        <View style={{ width: 48 }} />
+      </View>
       <Text style={styles.label}>หัวข้อ</Text>
       <TextInput style={styles.input} value={title} onChangeText={setTitle} />
       <Text style={styles.label}>คำอธิบาย (description)</Text>
@@ -94,7 +107,10 @@ export default function AdminEditNews({ route, navigation }) {
 
 const styles = StyleSheet.create({
   container: { flex:1, padding:16, backgroundColor:'#fff' },
-  header: { fontSize:18, fontWeight:'700', marginBottom:12 },
+  headerRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 },
+  header: { fontSize:18, fontWeight:'700' },
+  backBtn: { paddingHorizontal: 10, paddingVertical: 6, backgroundColor: '#fff', borderRadius: 8, borderWidth: 1, borderColor: '#eee' },
+  backText: { color: '#333', fontWeight: '600' },
   label: { marginTop:8, color:'#333', fontWeight:'600' },
   input: { borderWidth:1, borderColor:'#ddd', borderRadius:8, padding:10, marginTop:6 },
   button: { marginTop:16, backgroundColor:'#229954', padding:12, borderRadius:8, alignItems:'center' },

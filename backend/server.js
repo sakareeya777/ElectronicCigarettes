@@ -123,6 +123,32 @@ app.get('/reports', async (req, res) => {
   }
 });
 
+// Admin endpoint: list Firebase Authentication users (requires firebase-admin)
+// If environment variable ADMIN_SECRET is set, caller must provide header `x-admin-secret` matching it.
+app.get('/users', async (req, res) => {
+  if (!adminInitialized) return res.status(500).json({ error: 'admin_not_initialized', message: 'Place backend/serviceAccountKey.json to enable this endpoint' });
+  const requiredSecret = process.env.ADMIN_SECRET;
+  if (requiredSecret) {
+    const got = req.get('x-admin-secret') || req.query.secret || '';
+    if (got !== requiredSecret) return res.status(403).json({ error: 'forbidden' });
+  }
+  try {
+    const users = [];
+    let pageToken = undefined;
+    do {
+      const list = await admin.auth().listUsers(1000, pageToken);
+      list.users.forEach(u => {
+        users.push({ uid: u.uid, email: u.email || null, displayName: u.displayName || null, createdAt: u.metadata && u.metadata.creationTime ? u.metadata.creationTime : null, provider: (u.providerData && u.providerData[0] && u.providerData[0].providerId) || null });
+      });
+      pageToken = list.pageToken;
+    } while (pageToken);
+    return res.json({ users });
+  } catch (e) {
+    console.error('Failed to list users:', e && e.message);
+    return res.status(500).json({ error: 'list_failed' });
+  }
+});
+
 // Accept report submissions from the frontend
 app.post('/reports', async (req, res) => {
   const payload = req.body || {};

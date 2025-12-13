@@ -4,6 +4,7 @@ import { initializeApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
 import { getFirestore, collection, getDocs } from 'firebase/firestore';
 import { getDatabase, ref, set, get, onValue } from 'firebase/database';
+import { getStorage } from 'firebase/storage';
 
 const firebaseConfig = {
   apiKey: process.env.FIREBASE_API_KEY || "AIzaSyD43MgACRNs0Sx1ByuZdTK-Xq3zRl5-xGw",
@@ -20,6 +21,7 @@ const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
 const database = getDatabase(app);
+const storage = getStorage(app);
 
 // Example function to add news to Realtime Database
 async function addNewsRealtime(newsId, title, url, thumbnail) {
@@ -52,5 +54,5 @@ async function getNewsFirestore() {
   return reportList;
 }
 
-export { auth, db, database, ref, onValue, set, get, addNewsRealtime, getNewsRealtime, getNewsFirestore };
+export { auth, db, database, storage, ref, onValue, set, get, addNewsRealtime, getNewsRealtime, getNewsFirestore };
 

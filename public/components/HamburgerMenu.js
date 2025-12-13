@@ -37,6 +37,15 @@ export default function HamburgerMenu() {
             >
               Profile
             </Text>
+            <Text
+              style={styles.menuItem}
+              onPress={() => {
+                setVisible(false);
+                navigation.navigate('Report');
+              }}
+            >
+              รายงาน
+            </Text>
             {loggedIn ? (
               <Text
                 style={styles.menuItem}

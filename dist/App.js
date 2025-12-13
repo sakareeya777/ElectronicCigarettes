@@ -12,6 +12,8 @@ import ProfileScreen from './screens/ProfileScreen';
 import AdminAddNews from './screens/AdminAddNews';
 import AdminManageNews from './screens/AdminManageNews';
 import AdminEditNews from './screens/AdminEditNews';
+import AdminReport from './screens/AdminReport';
+import Report from './screens/ReportScreen';
 import UserAuthContextProvider from './context/UserAuthContext';
 
 
@@ -63,10 +65,12 @@ export default function App() {
           <Stack.Screen name="MainTabs" component={MainTabs} />
           <Stack.Screen name="AdminAddNews" component={AdminAddNews} />
           <Stack.Screen name="AdminManageNews" component={AdminManageNews} />
+          <Stack.Screen name="AdminReport" component={AdminReport} />
           <Stack.Screen name="AdminEditNews" component={AdminEditNews} />
           <Stack.Screen name="Login" component={Login} />
           <Stack.Screen name="Register" component={Register} />
           <Stack.Screen name="Profile" component={ProfileScreen} />
+          <Stack.Screen name="Report" component={Report} />
         </Stack.Navigator>
       </NavigationContainer>
     </UserAuthContextProvider>

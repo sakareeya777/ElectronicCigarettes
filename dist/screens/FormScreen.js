@@ -2,7 +2,8 @@ import React, { useState } from 'react';
 import { View, Text, StyleSheet, TextInput, TouchableOpacity, Image, Modal, ScrollView, Platform } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { MdReport, MdAddAPhoto } from 'react-icons/md';
-import { database, ref, set } from '../firebase/firebaseConfig';
+import { database, ref, set, storage } from '../firebase/firebaseConfig';
+import { ref as sRef, uploadBytes, getDownloadURL } from 'firebase/storage';
 
 export default function FormScreen() {
   const [location, setLocation] = useState('');
@@ -122,25 +123,75 @@ export default function FormScreen() {
       return;
     }
 
-    const payload = {
-      type,
-      date,
-      time,
-      location,
-      coords,
-      description,
-      // Note: media upload not implemented on web yet. We send mediaUri as hint only.
-      media: mediaUri ? { uri: mediaUri, mediaType } : null,
-      anonymous: submissionMode === 'anonymous',
-      reporter: submissionMode === 'identified' ? { name: reporterName || null, contact: reporterContact } : null,
-    };
     // Send payload to backend POST /reports
     const submit = async () => {
+      // payload as-fallback (uses original mediaUri when upload not yet attempted)
+      const payload = {
+        type,
+        date,
+        time,
+        location,
+        coords,
+        description,
+        media: mediaUri ? { uri: mediaUri, mediaType } : null,
+        anonymous: submissionMode === 'anonymous',
+        reporter: submissionMode === 'identified' ? { name: reporterName || null, contact: reporterContact } : null,
+      };
       try {
         setSubmitting(true);
         // Write directly to Realtime Database so frontend does not require backend server to be running
         const key = Date.now();
-        const rec = Object.assign({}, payload, { created_at: new Date().toISOString() });
+
+        // If mediaUri exists, either upload to Firebase Storage (if explicitly enabled),
+        // or convert to a data URL (base64) and store directly in Realtime Database.
+        // Storing as data URL avoids using Google Cloud Storage and CORS issues.
+        let mediaObj = null;
+        const USE_FIREBASE_STORAGE = (typeof process !== 'undefined' && process.env && process.env.USE_FIREBASE_STORAGE === 'true');
+        if (mediaUri) {
+          try {
+            // If it's already a remote URL, keep as-is
+            if (mediaUri.startsWith && (mediaUri.startsWith('http://') || mediaUri.startsWith('https://'))) {
+              mediaObj = { uri: mediaUri, mediaType };
+            } else if (USE_FIREBASE_STORAGE && storage) {
+              // Upload to Firebase Storage only when explicitly enabled
+              const resp = await fetch(mediaUri);
+              const blob = await resp.blob();
+              const storagePath = `reports/${key}/media_${Date.now()}`;
+              const storageReference = sRef(storage, storagePath);
+              await uploadBytes(storageReference, blob);
+              const downloadURL = await getDownloadURL(storageReference);
+              mediaObj = { uri: downloadURL, mediaType };
+            } else {
+              // Convert blob/local URI to data URL (base64) and store inline in RTDB
+              const resp = await fetch(mediaUri);
+              const blob = await resp.blob();
+              // read blob as data URL
+              const dataUrl = await new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onerror = () => { reader.abort(); reject(new Error('Failed to read blob as dataURL')); };
+                reader.onloadend = () => resolve(reader.result);
+                reader.readAsDataURL(blob);
+              });
+              mediaObj = { uri: dataUrl, mediaType };
+            }
+          } catch (uploadErr) {
+            console.warn('Media processing failed, continuing without media', uploadErr);
+            mediaObj = null;
+          }
+        }
+
+        const rec = Object.assign({}, {
+          type,
+          date,
+          time,
+          location,
+          coords,
+          description,
+          media: mediaObj,
+          anonymous: submissionMode === 'anonymous',
+          reporter: submissionMode === 'identified' ? { name: reporterName || null, contact: reporterContact } : null,
+        }, { created_at: new Date().toISOString() });
+
         await set(ref(database, `reports/${key}`), rec);
         console.log('Saved report to Realtime DB at reports/%s payload=', key, rec);
         alert('ส่งรายงานเรียบร้อย! ข้อมูลถูกบันทึกแบบเรียลไทม์');
